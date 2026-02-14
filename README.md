@@ -167,6 +167,17 @@ hunyuan_image_3_playground/
   <p>扫码反馈违规行为</p>
 </div>
 
+### 关于腾讯混元模型
+
+本项目使用的腾讯混元图像 3.0 模型遵循 **Tencent Hunyuan Community License Agreement**。
+
+**重要限制：**
+- ⚠️ 该许可证**不适用于**欧盟、英国和韩国地区
+- ⚠️ 如果月活用户超过 1 亿，需要向腾讯申请额外授权
+- ⚠️ 使用时需遵守 Acceptable Use Policy
+
+详细模型协议请查看：https://github.com/Tencent-Hunyuan/HunyuanImage-3.0/blob/main/LICENSE
+
 ---
 
 Copyright (c) 2025 米羊科技（珠海横琴）有限公司
