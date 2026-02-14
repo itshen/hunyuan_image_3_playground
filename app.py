@@ -79,10 +79,19 @@ async def init_db():
                 batch_count INTEGER DEFAULT 1,
                 batch_total_sec REAL DEFAULT 0,
                 parallel INTEGER DEFAULT 1,
+                ref_images TEXT,
                 created_at TEXT
             )
         """)
         await db.commit()
+        
+        # 检查是否需要添加 ref_images 字段（旧数据库升级）
+        cursor = await db.execute("PRAGMA table_info(images)")
+        columns = [row[1] for row in await cursor.fetchall()]
+        if "ref_images" not in columns:
+            await db.execute("ALTER TABLE images ADD COLUMN ref_images TEXT")
+            await db.commit()
+            print("✅ 数据库已升级：添加 ref_images 字段")
     print("✅ 数据库已初始化")
 
 
@@ -113,12 +122,15 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 async def save_image_record(*, job_id, filename, prompt, seed, image_size, width, height,
                             steps, api_url, status="completed", error=None, info=None,
-                            duration_sec=0, batch_count=1, batch_total_sec=0, parallel=True):
+                            duration_sec=0, batch_count=1, batch_total_sec=0, parallel=True,
+                            ref_images=None):
+    # ref_images 是文件名列表，存储为 JSON 字符串
+    ref_images_str = json.dumps(ref_images) if ref_images else None
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
-            INSERT INTO images (job_id, filename, prompt, seed, image_size, width, height, steps, api_url, status, error, info, duration_sec, batch_count, batch_total_sec, parallel, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (job_id, filename, prompt, seed, image_size, width, height, steps, api_url, status, error, info, duration_sec, batch_count, batch_total_sec, 1 if parallel else 0, now_bjt()))
+            INSERT INTO images (job_id, filename, prompt, seed, image_size, width, height, steps, api_url, status, error, info, duration_sec, batch_count, batch_total_sec, parallel, ref_images, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (job_id, filename, prompt, seed, image_size, width, height, steps, api_url, status, error, info, duration_sec, batch_count, batch_total_sec, 1 if parallel else 0, ref_images_str, now_bjt()))
         await db.commit()
 
 
@@ -286,7 +298,8 @@ async def execute_generation(job: dict):
                 image_size=image_size, width=actual_width, height=actual_height,
                 steps=steps, api_url=api_url, status="completed",
                 info=info_str, duration_sec=duration,
-                batch_count=count, batch_total_sec=0, parallel=parallel
+                batch_count=count, batch_total_sec=0, parallel=parallel,
+                ref_images=ref_images
             )
             
             # 更新任务进度
@@ -404,6 +417,7 @@ async def api_jobs():
             "ratio": info.get("ratio", "auto"),
             "actual_width": info.get("actual_width"),
             "actual_height": info.get("actual_height"),
+            "ref_images": info.get("ref_images", []),
         }
         for jid, info in active_jobs.items()
         if info.get("status") not in ("completed", "error")  # 只返回进行中的

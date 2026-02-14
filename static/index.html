@@ -226,9 +226,25 @@
         <button class="modal-close" id="modal-close">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
+        <!-- 左右切换按钮 -->
+        <button class="modal-nav modal-nav-prev" id="modal-prev" title="上一张">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button class="modal-nav modal-nav-next" id="modal-next" title="下一张">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
         <div class="modal-content">
-            <img id="modal-image" src="" alt="">
+            <div class="modal-main-image">
+                <img id="modal-image" src="" alt="">
+            </div>
+            <!-- 垫图预览区（有垫图时显示） -->
+            <div class="modal-ref-area" id="modal-ref-area">
+                <div class="modal-ref-label">垫图 <span class="modal-ref-hint">按空格切换</span></div>
+                <div class="modal-ref-images" id="modal-ref-images"></div>
+            </div>
         </div>
+        <!-- 图片计数器 -->
+        <div class="modal-counter" id="modal-counter"></div>
     </div>
 
     <!-- 排版预览 Modal -->

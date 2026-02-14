@@ -14,8 +14,8 @@ venv/
 env/
 ENV/
 
-# 数据库
-*.db
+# 数据库（保留 data.db 作为示例数据）
+# *.db
 *.sqlite
 *.sqlite3
 

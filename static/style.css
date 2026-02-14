@@ -1396,19 +1396,6 @@ body {
     background: rgba(0,0,0,0.9);
 }
 
-.modal-content {
-    position: relative;
-    max-width: 95vw;
-    max-height: 95vh;
-    z-index: 101;
-}
-
-.modal-content img {
-    max-width: 100%;
-    max-height: 95vh;
-    border-radius: 4px;
-}
-
 .modal-close {
     position: absolute;
     top: 20px;
@@ -1433,6 +1420,141 @@ body {
 .modal-close svg {
     width: 20px;
     height: 20px;
+}
+
+/* Modal 导航按钮 */
+.modal-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 48px;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 102;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.modal-nav:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.modal-nav svg {
+    width: 24px;
+    height: 24px;
+}
+
+.modal-nav-prev {
+    left: 20px;
+}
+
+.modal-nav-next {
+    right: 20px;
+}
+
+/* Modal 内容区域 */
+.modal-content {
+    position: relative;
+    max-width: 95vw;
+    max-height: 95vh;
+    z-index: 101;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.modal-main-image {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+}
+
+.modal-main-image img {
+    max-width: 90vw;
+    max-height: 80vh;
+    border-radius: 4px;
+    object-fit: contain;
+    transition: opacity 0.15s;
+}
+
+.modal-main-image img.showing-ref {
+    border: 2px solid rgba(255,255,255,0.3);
+}
+
+/* 垫图预览区 */
+.modal-ref-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-ref-label {
+    font-size: 12px;
+    color: rgba(255,255,255,0.6);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-ref-hint {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.modal-ref-images {
+    display: flex;
+    gap: 8px;
+}
+
+.modal-ref-thumb {
+    width: 60px;
+    height: 60px;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.2s, transform 0.2s;
+}
+
+.modal-ref-thumb:hover {
+    transform: scale(1.05);
+}
+
+.modal-ref-thumb.active {
+    border-color: rgba(255,255,255,0.8);
+}
+
+.modal-ref-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 图片计数器 */
+.modal-counter {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px;
+    color: rgba(255,255,255,0.6);
+    background: rgba(0,0,0,0.5);
+    padding: 4px 12px;
+    border-radius: 12px;
+    z-index: 102;
 }
 
 /* === Toast === */

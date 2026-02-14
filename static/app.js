@@ -433,7 +433,53 @@ function bindEvents() {
 
     dom.modalClose.addEventListener('click', closeModal);
     dom.modal.querySelector('.modal-backdrop').addEventListener('click', closeModal);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+    
+    // Modal 导航按钮
+    $('#modal-prev').addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigateModal('prev');
+    });
+    $('#modal-next').addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigateModal('next');
+    });
+    
+    // 键盘事件
+    document.addEventListener('keydown', e => {
+        if (!dom.modal.classList.contains('show')) return;
+        
+        switch (e.key) {
+            case 'Escape':
+                closeModal();
+                break;
+            case 'ArrowLeft':
+                navigateModal('prev');
+                break;
+            case 'ArrowRight':
+                navigateModal('next');
+                break;
+            case ' ':
+                e.preventDefault();
+                toggleRefImage();
+                break;
+        }
+    });
+    
+    // 点击 Modal 左右区域切换图片
+    dom.modal.querySelector('.modal-content').addEventListener('click', (e) => {
+        // 如果点击的是图片本身，根据点击位置判断方向
+        if (e.target === dom.modalImage || e.target.closest('.modal-main-image')) {
+            const rect = dom.modal.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const width = rect.width;
+            
+            if (clickX < width * 0.3) {
+                navigateModal('prev');
+            } else if (clickX > width * 0.7) {
+                navigateModal('next');
+            }
+        }
+    });
 
     dom.apiUrl.addEventListener('change', saveSettings);
     dom.seed.addEventListener('change', saveSettings);
@@ -590,6 +636,7 @@ async function startGenerate() {
         height: dim.height,            // 实际高度
         failed: false,                 // 是否失败
         error: null,                   // 错误信息
+        refImages: state.refImages.map(img => img.filename),  // 垫图文件名列表
     };
     
     renderActiveTasks();
@@ -777,6 +824,9 @@ async function pollJobs() {
                         batch_count: task.count,
                         seed: r.seed,
                         created_at: new Date().toISOString(),
+                        width: task.width,
+                        height: task.height,
+                        ref_images: task.refImages || null,  // 垫图列表
                     });
                 }
                 renderGallery();
@@ -1187,7 +1237,7 @@ function renderGallery() {
         return `
             <div class="card" data-id="${item.id}">
                 <div class="card-image">
-                    <img src="${url}" alt="${escapeHtml(prompt)}" loading="lazy" onclick="openModal('${safeUrl}')">
+                    <img src="${url}" alt="${escapeHtml(prompt)}" loading="lazy" onclick="openModal('${safeUrl}', ${item.id})">
                     <button class="card-delete-btn" onclick="deleteImage(${item.id}, event)" title="删除">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
@@ -1463,10 +1513,42 @@ async function useAsReference(url, event) {
     }
 }
 
-// ============ 模态框 ============
+// ============ 模态框（图片浏览器） ============
 
-function openModal(url) {
-    dom.modalImage.src = url;
+// 图片浏览器状态
+const imageViewer = {
+    currentIndex: -1,       // 当前图片在 history 中的索引
+    showingRef: false,      // 是否正在显示垫图
+    currentRefIndex: 0,     // 当前显示的垫图索引（多张垫图时）
+    lockedSize: null,       // 切换垫图时锁定的容器尺寸 {width, height}
+};
+
+function openModal(url, itemId) {
+    // 根据 URL 或 itemId 找到对应的 history 索引
+    let index = -1;
+    if (itemId !== undefined) {
+        index = state.history.findIndex(item => item.id === itemId);
+    } else {
+        // 通过 URL 匹配
+        index = state.history.findIndex(item => {
+            const itemUrl = item.url || `/output/${item.filename}`;
+            return itemUrl === url || url.includes(item.filename);
+        });
+    }
+    
+    imageViewer.currentIndex = index >= 0 ? index : 0;
+    imageViewer.showingRef = false;
+    imageViewer.currentRefIndex = 0;
+    imageViewer.lockedSize = null;
+    
+    // 清除容器的固定尺寸
+    const mainImageContainer = dom.modal.querySelector('.modal-main-image');
+    if (mainImageContainer) {
+        mainImageContainer.style.width = '';
+        mainImageContainer.style.height = '';
+    }
+    
+    updateModalDisplay();
     dom.modal.classList.add('show');
     document.body.style.overflow = 'hidden';
 }
@@ -1474,6 +1556,154 @@ function openModal(url) {
 function closeModal() {
     dom.modal.classList.remove('show');
     document.body.style.overflow = '';
+    imageViewer.showingRef = false;
+}
+
+function updateModalDisplay() {
+    const item = state.history[imageViewer.currentIndex];
+    if (!item) return;
+    
+    const mainUrl = item.url || `/output/${item.filename}`;
+    
+    // 解析 ref_images（可能是 JSON 字符串或数组）
+    let refImages = [];
+    if (item.ref_images) {
+        if (typeof item.ref_images === 'string') {
+            try {
+                refImages = JSON.parse(item.ref_images);
+            } catch (e) {
+                refImages = [];
+            }
+        } else if (Array.isArray(item.ref_images)) {
+            refImages = item.ref_images;
+        }
+    }
+    
+    const hasRef = refImages && refImages.length > 0;
+    const refArea = $('#modal-ref-area');
+    const refImagesContainer = $('#modal-ref-images');
+    const counter = $('#modal-counter');
+    const prevBtn = $('#modal-prev');
+    const nextBtn = $('#modal-next');
+    
+    const mainImageContainer = dom.modal.querySelector('.modal-main-image');
+    
+    // 显示主图或垫图
+    if (imageViewer.showingRef && hasRef) {
+        // 切换到垫图前，先记录当前主图的显示尺寸
+        if (!imageViewer.lockedSize) {
+            const rect = dom.modalImage.getBoundingClientRect();
+            imageViewer.lockedSize = { width: rect.width, height: rect.height };
+        }
+        
+        // 显示垫图，使用锁定的尺寸
+        const refUrl = `/uploads/${refImages[imageViewer.currentRefIndex]}`;
+        dom.modalImage.src = refUrl;
+        dom.modalImage.classList.add('showing-ref');
+        
+        // 固定容器尺寸
+        if (imageViewer.lockedSize) {
+            mainImageContainer.style.width = `${imageViewer.lockedSize.width}px`;
+            mainImageContainer.style.height = `${imageViewer.lockedSize.height}px`;
+            dom.modalImage.style.width = '100%';
+            dom.modalImage.style.height = '100%';
+            dom.modalImage.style.objectFit = 'contain';
+        }
+    } else {
+        // 显示主图，清除锁定尺寸
+        imageViewer.lockedSize = null;
+        dom.modalImage.src = mainUrl;
+        dom.modalImage.classList.remove('showing-ref');
+        mainImageContainer.style.width = '';
+        mainImageContainer.style.height = '';
+        dom.modalImage.style.width = '';
+        dom.modalImage.style.height = '';
+        dom.modalImage.style.objectFit = '';
+    }
+    
+    // 垫图预览区
+    if (hasRef) {
+        refArea.style.display = '';
+        refImagesContainer.innerHTML = refImages.map((fname, idx) => {
+            const active = imageViewer.showingRef && idx === imageViewer.currentRefIndex;
+            return `<div class="modal-ref-thumb${active ? ' active' : ''}" data-idx="${idx}">
+                <img src="/uploads/${fname}" alt="垫图 ${idx + 1}">
+            </div>`;
+        }).join('');
+        
+        // 绑定点击事件
+        refImagesContainer.querySelectorAll('.modal-ref-thumb').forEach(thumb => {
+            thumb.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = parseInt(thumb.dataset.idx);
+                imageViewer.currentRefIndex = idx;
+                imageViewer.showingRef = true;
+                updateModalDisplay();
+            });
+        });
+    } else {
+        refArea.style.display = 'none';
+    }
+    
+    // 更新计数器
+    const total = state.history.length;
+    const current = imageViewer.currentIndex + 1;
+    counter.textContent = `${current} / ${total}`;
+    
+    // 更新导航按钮状态
+    prevBtn.style.opacity = imageViewer.currentIndex > 0 ? '' : '0.3';
+    nextBtn.style.opacity = imageViewer.currentIndex < total - 1 ? '' : '0.3';
+}
+
+function navigateModal(direction) {
+    const total = state.history.length;
+    if (total === 0) return;
+    
+    // 切换图片时重置垫图状态和锁定尺寸
+    imageViewer.showingRef = false;
+    imageViewer.currentRefIndex = 0;
+    imageViewer.lockedSize = null;
+    
+    // 清除容器的固定尺寸
+    const mainImageContainer = dom.modal.querySelector('.modal-main-image');
+    if (mainImageContainer) {
+        mainImageContainer.style.width = '';
+        mainImageContainer.style.height = '';
+    }
+    
+    if (direction === 'prev' && imageViewer.currentIndex > 0) {
+        imageViewer.currentIndex--;
+        updateModalDisplay();
+    } else if (direction === 'next' && imageViewer.currentIndex < total - 1) {
+        imageViewer.currentIndex++;
+        updateModalDisplay();
+    }
+}
+
+function toggleRefImage() {
+    const item = state.history[imageViewer.currentIndex];
+    if (!item) return;
+    
+    // 解析 ref_images
+    let refImages = [];
+    if (item.ref_images) {
+        if (typeof item.ref_images === 'string') {
+            try {
+                refImages = JSON.parse(item.ref_images);
+            } catch (e) {
+                refImages = [];
+            }
+        } else if (Array.isArray(item.ref_images)) {
+            refImages = item.ref_images;
+        }
+    }
+    
+    if (!refImages || refImages.length === 0) {
+        return; // 没有垫图，不切换
+    }
+    
+    imageViewer.showingRef = !imageViewer.showingRef;
+    updateModalDisplay();
 }
 
 // ============ Toast ============
@@ -1545,6 +1775,7 @@ async function checkActiveJobs() {
                     ratio: job.ratio || 'auto',
                     width: job.actual_width,
                     height: job.actual_height,
+                    refImages: job.ref_images || null,  // 垫图列表
                 };
             });
             renderActiveTasks();
