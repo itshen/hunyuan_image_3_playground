@@ -1,6 +1,15 @@
-# HunyuanImage API 测试工具
+# HunyuanImage 3 Playground
 
-本地 Web 测试页面，用于测试 HunyuanImage API 服务。让 AI 图像生成变得简单高效！
+本地 Web 测试页面，用于测试腾讯混元图像 3.0 API 服务。让 AI 图像生成变得简单高效！
+
+**Powered by Tencent Hunyuan**
+
+## 🔗 混元图像 3.0 相关链接
+
+- [官方网站](https://hunyuan.tencent.com/image/zh)
+- [HuggingFace](https://huggingface.co/tencent/HunyuanImage-3.0-Instruct)
+- [技术论文](https://arxiv.org/abs/2509.23951)
+- [官方 GitHub](https://github.com/Tencent-Hunyuan/HunyuanImage-3.0)
 
 ## 🌟 核心优势
 
@@ -88,24 +97,25 @@ hunyuan_image_3_playground/
   <img src="sponsor.jpg" alt="赞赏码" width="200"/>
 </div>
 
-## 📄 开源协议
+## 📄 许可证
 
-本项目采用 **GNU Affero General Public License v3.0 (AGPL-3.0)** 开源协议。
+### Playground 代码
+
+本 Playground 项目代码采用 **MIT License** 开源。
 
 ### 使用说明
 
-  ✅ **个人使用**：完全免费，可自由使用、学习、修改
-  ✅ **开源项目**：可自由使用，需遵守 AGPL-3.0 协议
-  ✅ **友好合作**：欢迎共建，欢迎贡献代码和想法
-  ⚠️ **网络服务**：如果修改代码并提供网络服务，必须开源全部修改
+✅ **个人使用**：完全免费，可自由使用、学习、修改
+✅ **开源项目**：可自由使用，需遵守 MIT 协议
+✅ **友好合作**：欢迎共建，欢迎贡献代码和想法
 
 ### 重要声明
 
 **本项目不做任何商业化，不提供商业授权。**
 
-  ❌ 严禁将本项目源码用于商业销售
-  ❌ 严禁提供基于本项目的付费部署服务
-  ❌ 婉拒纯商业合作
+❌ 严禁将本项目源码用于商业销售
+❌ 严禁提供基于本项目的付费部署服务
+❌ 婉拒纯商业合作
 
 如发现有人违规销售本项目或提供付费部署服务，欢迎扫码反馈：
 
@@ -114,8 +124,17 @@ hunyuan_image_3_playground/
   <p>扫码反馈违规行为</p>
 </div>
 
+### 混元图像模型
+
+本项目使用的腾讯混元图像 3.0 模型遵循 **Tencent Hunyuan Community License Agreement**。
+
+**重要提示：**
+- 该许可证**不适用于**欧盟、英国和韩国地区
+- 如果月活用户超过 1 亿，需要向腾讯申请额外授权
+- 使用时需遵守 [Acceptable Use Policy](LICENSE)
+
+详细协议内容请查看混元 [LICENSE](LICENSE) 文件。
+
 ---
 
 Copyright (c) 2025 米羊科技（珠海横琴）有限公司
-
-详细协议内容请查看 [LICENSE](LICENSE) 文件。

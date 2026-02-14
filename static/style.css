@@ -2574,6 +2574,13 @@ body {
     text-decoration: underline;
 }
 
+.about-links-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    margin-top: 8px;
+}
+
 .about-qr-container {
     display: flex;
     gap: 24px;
