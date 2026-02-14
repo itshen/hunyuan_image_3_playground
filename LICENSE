@@ -677,3 +677,34 @@ specific requirements.
 if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
+
+================================================================================
+
+NOTICE REGARDING TENCENT HUNYUAN IMAGE 3.0 MODEL
+
+This project uses Tencent Hunyuan Image 3.0 model, which is subject to the
+TENCENT HUNYUAN COMMUNITY LICENSE AGREEMENT.
+
+The Tencent Hunyuan model license is SEPARATE from the AGPL-3.0 license of
+this Playground code. When using this project, you must comply with BOTH:
+
+1. AGPL-3.0 for the Playground code (this repository)
+2. Tencent Hunyuan Community License for the AI model
+
+Key restrictions of Tencent Hunyuan license:
+- NOT applicable in European Union, United Kingdom and South Korea
+- If monthly active users exceed 100 million, additional license required
+- Must comply with Acceptable Use Policy
+- Cannot use outside the specified Territory
+
+For full Tencent Hunyuan license terms, visit:
+https://github.com/Tencent-Hunyuan/HunyuanImage-3.0/blob/main/LICENSE
+
+Related Links:
+- Official Website: https://hunyuan.tencent.com/image/zh
+- HuggingFace: https://huggingface.co/tencent/HunyuanImage-3.0-Instruct
+- Paper: https://arxiv.org/abs/2509.23951
+- GitHub: https://github.com/Tencent-Hunyuan/HunyuanImage-3.0
+
+Powered by Tencent Hunyuan
+
