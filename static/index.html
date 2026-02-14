@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>混元图像 3 Playground</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('hunyuan_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+</head>
+<body>
+    <div class="app">
+        <nav class="app-nav">
+            <div class="nav-left">
+                <div class="nav-brand">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    <span>混元图像 3 Playground</span>
+                </div>
+            </div>
+            
+            <!-- 中间：当前任务状态栏 -->
+            <div class="nav-center" id="nav-task-bar">
+                <!-- 由 JS 渲染当前任务 -->
+            </div>
+            
+            <!-- 悬浮队列面板（独立于按钮，跟随任务区域） -->
+            <div class="queue-panel" id="queue-panel">
+                <div class="queue-panel-header">
+                    <span class="queue-panel-title">排队中</span>
+                    <span class="queue-panel-count" id="queue-panel-count"></span>
+                </div>
+                <div class="queue-panel-body" id="queue-panel-body">
+                    <!-- 队列内容由 JS 渲染 -->
+                </div>
+            </div>
+            
+            <div class="nav-right">
+                <!-- 队列按钮（有排队时显示） -->
+                <button id="queue-trigger-btn" class="icon-btn queue-trigger" title="查看队列">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    <span class="queue-badge" id="queue-badge"></span>
+                </button>
+                <button id="theme-toggle-btn" class="icon-btn" title="切换主题">
+                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                </button>
+                <button id="about-btn" class="text-btn">反馈</button>
+            </div>
+        </nav>
+
+        <div class="main-layout">
+            <aside class="sidebar">
+                <div class="sidebar-content">
+                    <!-- API 配置 -->
+                    <div class="section">
+                        <label class="section-label">API 地址</label>
+                        <div class="field">
+                            <input type="text" id="api-url" class="input" placeholder="https://your-deployment-url.link" value="">
+                        </div>
+                    </div>
+
+                    <!-- 服务器价格 -->
+                    <div class="section">
+                        <label class="section-label">服务器价格 <span class="label-hint">元/小时，用于计算单张成本</span></label>
+                        <div class="field field-sm">
+                            <input type="text" id="server-price" class="input input-sm" placeholder="例如 3.5" value="">
+                        </div>
+                    </div>
+
+                    <!-- 提示词 -->
+                    <div class="section">
+                        <div class="section-header">
+                            <label class="section-label">提示词</label>
+                            <button class="quick-select-btn" id="quick-select-btn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                                <span>快速选择</span>
+                            </button>
+                        </div>
+                        <div class="field">
+                            <textarea id="prompt" class="textarea" placeholder="文生图：描述你想生成的图像...&#10;图生图：描述你想对参考图做的修改..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- 参考图 -->
+                    <div class="section">
+                        <label class="section-label">参考图 <span class="label-hint">可选，上传后变为图生图模式</span></label>
+                        <div class="upload-zone" id="upload-zone">
+                            <svg class="upload-zone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                            <div class="upload-zone-text">拖拽或点击上传参考图</div>
+                            <div class="upload-zone-hint">支持 JPG / PNG / WebP</div>
+                        </div>
+                        <input type="file" id="upload-input" accept="image/*" multiple style="display: none;">
+                        <div id="ref-preview" class="ref-preview"></div>
+                    </div>
+
+
+                    <!-- 参数 -->
+                    <div class="section">
+                        <label class="section-label">生成参数</label>
+                        <div class="params-grid">
+                            <div class="param-item">
+                                <span class="param-label">Seed</span>
+                                <div class="field field-sm">
+                                    <input type="text" id="seed" class="input input-sm" value="42">
+                                </div>
+                            </div>
+                            <div class="param-item">
+                                <span class="param-label">步数</span>
+                                <div class="field field-sm">
+                                    <input type="text" id="steps" class="input input-sm" value="50">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="param-row" style="margin-top: 12px;">
+                            <span class="param-label">比例</span>
+                            <div class="btn-segment-wrap" id="ratio-options">
+                                <div class="btn-segment">
+                                    <button class="segment-item" data-ratio="auto">auto</button>
+                                    <button class="segment-item active" data-ratio="1:1">1:1</button>
+                                    <button class="segment-item" data-ratio="4:3">4:3</button>
+                                    <button class="segment-item" data-ratio="3:4">3:4</button>
+                                </div>
+                                <div class="btn-segment" style="margin-top: 8px;">
+                                    <button class="segment-item" data-ratio="16:9">16:9</button>
+                                    <button class="segment-item" data-ratio="9:16">9:16</button>
+                                    <button class="segment-item" data-ratio="21:9">21:9</button>
+                                    <button class="segment-item" data-ratio="9:21">9:21</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="param-row" id="resolution-row" style="margin-top: 12px;">
+                            <span class="param-label">最长边</span>
+                            <div class="btn-segment" id="resolution-options">
+                                <button class="segment-item" data-res="768">768</button>
+                                <button class="segment-item" data-res="1024">1024</button>
+                                <button class="segment-item active" data-res="1280">1280</button>
+                                <button class="segment-item" data-res="1536">1536</button>
+                                <button class="segment-item" data-res="2048">2048</button>
+                                <button class="segment-item" data-res="4096">4096</button>
+                            </div>
+                        </div>
+
+                        <div class="param-row" style="margin-top: 12px;">
+                            <span class="param-label">数量</span>
+                            <div class="btn-segment" id="count-options">
+                                <button class="segment-item active" data-count="1">1 张</button>
+                                <button class="segment-item" data-count="2">2 张</button>
+                                <button class="segment-item" data-count="4">4 张</button>
+                            </div>
+                        </div>
+
+                        <div class="param-row" style="margin-top: 12px;">
+                            <span class="param-label">模式</span>
+                            <div class="btn-segment" id="parallel-options">
+                                <button class="segment-item active" data-parallel="false">顺序</button>
+                                <button class="segment-item" data-parallel="true">并发</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-footer">
+                    <button id="generate-btn" class="btn-generate">
+                        <span class="btn-generate-text">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                            生成
+                        </span>
+                        <span class="btn-generate-res" id="resolution-preview">1280 x 1280</span>
+                    </button>
+                </div>
+            </aside>
+
+            <main class="workspace">
+                <!-- 生成结果区域 -->
+                    <header class="workspace-header">
+                        <div class="workspace-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                            <span>画廊</span>
+                            <span class="workspace-count" id="image-count"></span>
+                        </div>
+                        <div class="workspace-actions">
+                            <!-- 选图操作栏（在画廊按钮左侧） -->
+                            <div class="gallery-select-bar" id="gallery-select-bar">
+                                <div class="gallery-select-info">
+                                    已选 <strong id="gallery-select-count">0</strong>/9
+                                </div>
+                                <div class="gallery-select-actions">
+                                    <button class="btn-primary" id="gallery-confirm-btn" disabled>确定</button>
+                                    <button class="btn-secondary" id="gallery-cancel-btn">取消</button>
+                                </div>
+                            </div>
+                            <button id="gallery-mode-btn" class="icon-btn" title="画廊模式">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+                            </button>
+                            <button id="compact-view-btn" class="icon-btn" title="紧凑视图">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                            </button>
+                            <button id="clear-all-btn" class="icon-btn danger" title="清空全部">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
+                    </header>
+                    <div class="workspace-body" id="workspace-body">
+                        <div id="gallery" class="gallery"></div>
+                    <div id="empty-state" class="empty">
+                        <div class="empty-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        </div>
+                        <div class="empty-title">输入提示词开始生成</div>
+                        <div class="empty-desc">生成的图像将展示在这里</div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="modal" id="image-modal">
+        <div class="modal-backdrop"></div>
+        <button class="modal-close" id="modal-close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div class="modal-content">
+            <img id="modal-image" src="" alt="">
+        </div>
+    </div>
+
+    <!-- 排版预览 Modal -->
+    <div class="collage-modal" id="collage-modal">
+        <div class="collage-modal-header">
+            <div class="collage-modal-title">排版预览</div>
+            <div class="collage-modal-options">
+                <label class="collage-checkbox">
+                    <input type="checkbox" id="collage-show-shadow" checked>
+                    <span>图片阴影</span>
+                </label>
+                <label class="collage-checkbox">
+                    <input type="checkbox" id="collage-show-prompt">
+                    <span>显示提示词</span>
+                </label>
+            </div>
+            <button class="collage-modal-close" id="collage-close-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="collage-modal-body">
+            <!-- 左侧排版选择 -->
+            <div class="collage-layouts" id="collage-layouts">
+                <div class="collage-layout-item active" data-layout="auto" title="自动排列">
+                    <svg viewBox="0 0 48 32"><rect x="2" y="2" width="20" height="12" rx="2" fill="currentColor" opacity="0.3"/><rect x="26" y="2" width="20" height="12" rx="2" fill="currentColor" opacity="0.3"/><rect x="2" y="18" width="20" height="12" rx="2" fill="currentColor" opacity="0.3"/><rect x="26" y="18" width="20" height="12" rx="2" fill="currentColor" opacity="0.3"/></svg>
+                    <span>自动</span>
+                </div>
+                <div class="collage-layout-item" data-layout="horizontal" title="横向排列">
+                    <svg viewBox="0 0 48 32"><rect x="2" y="8" width="13" height="16" rx="2" fill="currentColor" opacity="0.3"/><rect x="18" y="8" width="13" height="16" rx="2" fill="currentColor" opacity="0.3"/><rect x="34" y="8" width="12" height="16" rx="2" fill="currentColor" opacity="0.3"/></svg>
+                    <span>横排</span>
+                </div>
+                <div class="collage-layout-item" data-layout="vertical" title="纵向排列">
+                    <svg viewBox="0 0 48 32"><rect x="14" y="2" width="20" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="14" y="12" width="20" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="14" y="22" width="20" height="8" rx="2" fill="currentColor" opacity="0.3"/></svg>
+                    <span>竖排</span>
+                </div>
+                <div class="collage-layout-item" data-layout="grid" title="网格排列">
+                    <svg viewBox="0 0 48 32"><rect x="2" y="2" width="13" height="13" rx="2" fill="currentColor" opacity="0.3"/><rect x="18" y="2" width="13" height="13" rx="2" fill="currentColor" opacity="0.3"/><rect x="34" y="2" width="12" height="13" rx="2" fill="currentColor" opacity="0.3"/><rect x="2" y="17" width="13" height="13" rx="2" fill="currentColor" opacity="0.3"/><rect x="18" y="17" width="13" height="13" rx="2" fill="currentColor" opacity="0.3"/><rect x="34" y="17" width="12" height="13" rx="2" fill="currentColor" opacity="0.3"/></svg>
+                    <span>网格</span>
+                </div>
+                <div class="collage-layout-item" data-layout="masonry" title="瀑布流">
+                    <svg viewBox="0 0 48 32"><rect x="2" y="2" width="14" height="18" rx="2" fill="currentColor" opacity="0.3"/><rect x="18" y="2" width="14" height="10" rx="2" fill="currentColor" opacity="0.3"/><rect x="34" y="2" width="12" height="14" rx="2" fill="currentColor" opacity="0.3"/><rect x="18" y="14" width="14" height="16" rx="2" fill="currentColor" opacity="0.3"/><rect x="2" y="22" width="14" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="34" y="18" width="12" height="12" rx="2" fill="currentColor" opacity="0.3"/></svg>
+                    <span>瀑布</span>
+                </div>
+                <div class="collage-layout-item" data-layout="diagonal" title="对角线排列">
+                    <svg viewBox="0 0 48 32"><rect x="2" y="2" width="12" height="10" rx="2" fill="currentColor" opacity="0.3"/><rect x="18" y="11" width="12" height="10" rx="2" fill="currentColor" opacity="0.3"/><rect x="34" y="20" width="12" height="10" rx="2" fill="currentColor" opacity="0.3"/></svg>
+                    <span>对角</span>
+                </div>
+                <div class="collage-layout-item" data-layout="stack" title="堆叠排列">
+                    <svg viewBox="0 0 48 32"><rect x="4" y="4" width="24" height="16" rx="2" fill="currentColor" opacity="0.2"/><rect x="12" y="8" width="24" height="16" rx="2" fill="currentColor" opacity="0.3"/><rect x="20" y="12" width="24" height="16" rx="2" fill="currentColor" opacity="0.4"/></svg>
+                    <span>堆叠</span>
+                </div>
+                <div class="collage-layout-item" data-layout="scatter" title="散落排列">
+                    <svg viewBox="0 0 48 32"><rect x="3" y="5" width="10" height="8" rx="2" fill="currentColor" opacity="0.3" transform="rotate(-5 8 9)"/><rect x="28" y="3" width="14" height="10" rx="2" fill="currentColor" opacity="0.3" transform="rotate(8 35 8)"/><rect x="8" y="18" width="12" height="9" rx="2" fill="currentColor" opacity="0.3" transform="rotate(3 14 22)"/><rect x="30" y="17" width="11" height="12" rx="2" fill="currentColor" opacity="0.3" transform="rotate(-6 35 23)"/></svg>
+                    <span>散落</span>
+                </div>
+                <div class="collage-layout-item" data-layout="focus" title="焦点排列">
+                    <svg viewBox="0 0 48 32"><rect x="8" y="4" width="32" height="20" rx="2" fill="currentColor" opacity="0.4"/><rect x="2" y="26" width="10" height="4" rx="1" fill="currentColor" opacity="0.2"/><rect x="14" y="26" width="10" height="4" rx="1" fill="currentColor" opacity="0.2"/><rect x="26" y="26" width="10" height="4" rx="1" fill="currentColor" opacity="0.2"/><rect x="38" y="26" width="8" height="4" rx="1" fill="currentColor" opacity="0.2"/></svg>
+                    <span>焦点</span>
+                </div>
+                <div class="collage-layout-item" data-layout="circle" title="环形排列">
+                    <svg viewBox="0 0 48 32"><rect x="18" y="2" width="12" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="32" y="8" width="12" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="32" y="18" width="12" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="18" y="22" width="12" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="4" y="18" width="12" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="4" y="8" width="12" height="8" rx="2" fill="currentColor" opacity="0.3"/></svg>
+                    <span>环形</span>
+                </div>
+                <div class="collage-layout-item" data-layout="leftFocus" title="左大右小">
+                    <svg viewBox="0 0 48 32"><rect x="2" y="2" width="28" height="28" rx="2" fill="currentColor" opacity="0.4"/><rect x="32" y="2" width="14" height="9" rx="2" fill="currentColor" opacity="0.25"/><rect x="32" y="13" width="14" height="8" rx="2" fill="currentColor" opacity="0.25"/><rect x="32" y="23" width="14" height="7" rx="2" fill="currentColor" opacity="0.25"/></svg>
+                    <span>左焦点</span>
+                </div>
+                <div class="collage-layout-item" data-layout="rightFocus" title="右大左小">
+                    <svg viewBox="0 0 48 32"><rect x="2" y="2" width="14" height="9" rx="2" fill="currentColor" opacity="0.25"/><rect x="2" y="13" width="14" height="8" rx="2" fill="currentColor" opacity="0.25"/><rect x="2" y="23" width="14" height="7" rx="2" fill="currentColor" opacity="0.25"/><rect x="18" y="2" width="28" height="28" rx="2" fill="currentColor" opacity="0.4"/></svg>
+                    <span>右焦点</span>
+                </div>
+                <div class="collage-layout-item" data-layout="tShape" title="T型排列">
+                    <svg viewBox="0 0 48 32"><rect x="2" y="2" width="14" height="10" rx="2" fill="currentColor" opacity="0.3"/><rect x="18" y="2" width="14" height="10" rx="2" fill="currentColor" opacity="0.3"/><rect x="34" y="2" width="12" height="10" rx="2" fill="currentColor" opacity="0.3"/><rect x="10" y="14" width="28" height="16" rx="2" fill="currentColor" opacity="0.4"/></svg>
+                    <span>T型</span>
+                </div>
+                <div class="collage-layout-item" data-layout="filmStrip" title="胶片排列">
+                    <svg viewBox="0 0 48 32"><rect x="2" y="10" width="8" height="12" rx="1" fill="currentColor" opacity="0.25"/><rect x="12" y="8" width="10" height="16" rx="1" fill="currentColor" opacity="0.35"/><rect x="24" y="6" width="12" height="20" rx="1" fill="currentColor" opacity="0.45"/><rect x="38" y="8" width="8" height="16" rx="1" fill="currentColor" opacity="0.3"/></svg>
+                    <span>胶片</span>
+                </div>
+                <div class="collage-layout-item" data-layout="pyramid" title="金字塔排列">
+                    <svg viewBox="0 0 48 32"><rect x="18" y="2" width="12" height="10" rx="2" fill="currentColor" opacity="0.35"/><rect x="10" y="14" width="12" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="26" y="14" width="12" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="2" y="24" width="10" height="6" rx="2" fill="currentColor" opacity="0.25"/><rect x="14" y="24" width="10" height="6" rx="2" fill="currentColor" opacity="0.25"/><rect x="26" y="24" width="10" height="6" rx="2" fill="currentColor" opacity="0.25"/><rect x="38" y="24" width="8" height="6" rx="2" fill="currentColor" opacity="0.25"/></svg>
+                    <span>金字塔</span>
+                </div>
+                <div class="collage-layout-item" data-layout="wave" title="波浪排列">
+                    <svg viewBox="0 0 48 32"><rect x="2" y="14" width="10" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="14" y="8" width="10" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="26" y="16" width="10" height="8" rx="2" fill="currentColor" opacity="0.3"/><rect x="38" y="10" width="8" height="8" rx="2" fill="currentColor" opacity="0.3"/></svg>
+                    <span>波浪</span>
+                </div>
+                <div class="collage-layout-item" data-layout="mosaic" title="马赛克排列">
+                    <svg viewBox="0 0 48 32"><rect x="2" y="2" width="22" height="14" rx="2" fill="currentColor" opacity="0.35"/><rect x="26" y="2" width="10" height="14" rx="2" fill="currentColor" opacity="0.3"/><rect x="38" y="2" width="8" height="8" rx="1" fill="currentColor" opacity="0.25"/><rect x="38" y="12" width="8" height="4" rx="1" fill="currentColor" opacity="0.2"/><rect x="2" y="18" width="10" height="12" rx="2" fill="currentColor" opacity="0.3"/><rect x="14" y="18" width="16" height="12" rx="2" fill="currentColor" opacity="0.35"/><rect x="32" y="18" width="14" height="12" rx="2" fill="currentColor" opacity="0.3"/></svg>
+                    <span>马赛克</span>
+                </div>
+            </div>
+            <!-- 预览区域 -->
+            <div class="collage-preview-wrap">
+                <div class="collage-preview" id="collage-preview">
+                    <!-- 动态渲染排版预览 -->
+                </div>
+            </div>
+        </div>
+        <div class="collage-modal-footer">
+            <button class="btn-secondary btn-lg" id="collage-back-btn">返回选图</button>
+            
+            <!-- 对齐和分布工具栏（选中图片时显示） -->
+            <div class="align-tools" id="align-tools" style="display: none;">
+                <div class="align-group">
+                    <span class="align-label">对齐</span>
+                    <button class="align-btn" data-align="left" title="左对齐">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="3" y2="18"/><rect x="7" y="8" width="10" height="3" rx="1"/><rect x="7" y="13" width="14" height="3" rx="1"/></svg>
+                    </button>
+                    <button class="align-btn" data-align="center-h" title="水平居中">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="6" x2="12" y2="18"/><rect x="7" y="8" width="10" height="3" rx="1"/><rect x="5" y="13" width="14" height="3" rx="1"/></svg>
+                    </button>
+                    <button class="align-btn" data-align="right" title="右对齐">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="21" y1="6" x2="21" y2="18"/><rect x="7" y="8" width="10" height="3" rx="1"/><rect x="3" y="13" width="14" height="3" rx="1"/></svg>
+                    </button>
+                    <button class="align-btn" data-align="top" title="顶对齐">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="18" y2="3"/><rect x="8" y="7" width="3" height="10" rx="1"/><rect x="13" y="7" width="3" height="14" rx="1"/></svg>
+                    </button>
+                    <button class="align-btn" data-align="center-v" title="垂直居中">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="12" x2="18" y2="12"/><rect x="8" y="7" width="3" height="10" rx="1"/><rect x="13" y="5" width="3" height="14" rx="1"/></svg>
+                    </button>
+                    <button class="align-btn" data-align="bottom" title="底对齐">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="21" x2="18" y2="21"/><rect x="8" y="7" width="3" height="10" rx="1"/><rect x="13" y="3" width="3" height="14" rx="1"/></svg>
+                    </button>
+                </div>
+                <div class="align-group">
+                    <span class="align-label">分布</span>
+                    <button class="align-btn" data-distribute="horizontal" title="水平分布">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="4" height="8" rx="1"/><rect x="10" y="8" width="4" height="8" rx="1"/><rect x="17" y="8" width="4" height="8" rx="1"/></svg>
+                    </button>
+                    <button class="align-btn" data-distribute="vertical" title="垂直分布">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="3" width="8" height="4" rx="1"/><rect x="8" y="10" width="8" height="4" rx="1"/><rect x="8" y="17" width="8" height="4" rx="1"/></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="export-group">
+                <select class="export-scale" id="collage-export-scale">
+                    <option value="1">1x</option>
+                    <option value="2" selected>2x</option>
+                    <option value="4">4x</option>
+                </select>
+                <button class="btn-primary btn-lg" id="collage-export-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    导出 PNG
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- 快速选择弹窗 -->
+    <div class="quick-select-panel" id="quick-select-panel">
+        <div class="quick-select-header">
+            <span class="quick-select-title">选择提示词</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="lucky-btn" id="lucky-btn">手气不错</button>
+                <button class="quick-select-close" id="quick-select-close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="prompt-panel">
+            <div class="prompt-panel-left" id="prompt-group-list"></div>
+            <div class="prompt-panel-right" id="prompt-chips"></div>
+        </div>
+    </div>
+
+    <!-- 关于页面遮罩 -->
+    <div class="about-overlay" id="about-overlay"></div>
+    
+    <!-- 关于页面 -->
+    <div class="about-page" id="about-page">
+        <div class="about-header">
+            <button class="about-back" id="about-back">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                返回
+            </button>
+        </div>
+        <div class="about-content">
+            <div class="about-intro">
+                <div class="about-greeting">嗨，我是洛小山</div>
+                <div class="about-description">
+                    白天是个爱折腾的 AI 产品经理<br>
+                    晚上是个快乐的小开发~
+                </div>
+            </div>
+
+            <div class="about-section">
+                <div class="about-section-title">关于这个工具</div>
+                <div class="about-section-content">
+                    混元图像 3 Playground 是一个简洁高效的 AI 图像生成测试工具，帮助你快速体验腾讯混元图像 API 的强大能力。
+                </div>
+            </div>
+
+            <div class="about-section">
+                <div class="about-section-title">推荐部署</div>
+                <div class="about-section-content">
+                    推荐在 <a href="https://console.suanli.cn/serverless/idc" target="_blank" rel="noopener noreferrer" class="about-home-link">算力云平台 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a> 开通 640G 显存以上的弹性设备进行部署。
+                </div>
+            </div>
+
+            <div class="about-section">
+                <div class="about-section-title">更多好玩的</div>
+                <div class="about-section-content">
+                    我还在捣鼓更多有趣的 AI 小工具，会在公众号<strong>【洛小山】</strong>和大家分享：
+                    <ul>
+                        <li>各种实用的 AI 工具</li>
+                        <li>有趣的技术教程</li>
+                        <li>AI 技术到产品的实践</li>
+                        <li>AI 产品拆解</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="about-section">
+                <div class="about-section-title">期待你的想法</div>
+                <div class="about-section-content">
+                    在日常工作或生活中，有没有觉得"要是有个 AI 工具能帮我做这个就好了"？欢迎扫码和我聊聊，说不定你的小需求就能变成下一个实用工具！
+                </div>
+            </div>
+
+            <div class="about-section">
+                <div class="about-section-title">遇到问题？</div>
+                <div class="about-section-content">
+                    开发不易，难免有 bug ~ 如果你发现了什么问题，欢迎来和我说说，我会及时修复的！你的反馈就是对我最好的支持
+                </div>
+            </div>
+
+            <div class="about-section">
+                <div class="about-section-title">个人主页</div>
+                <div class="about-section-content">
+                    <a href="https://luoxiaoshan.cn" target="_blank" class="about-home-link">
+                        luoxiaoshan.cn
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    </a>
+                </div>
+            </div>
+
+            <div class="about-qr-container">
+                <div class="about-qr-item">
+                    <div class="about-qr-box">
+                        <img src="/static/qrcode.jpg" alt="公众号二维码">
+                    </div>
+                    <div class="about-qr-label">关注公众号<br>学习更多 AI 技巧</div>
+                </div>
+                <div class="about-qr-item">
+                    <div class="about-qr-box">
+                        <img src="/static/sponsor.jpg" alt="赞赏码">
+                    </div>
+                    <div class="about-qr-label">开源不易<br>感谢支持一杯咖啡</div>
+                </div>
+            </div>
+
+            <div class="about-footer">
+                <p>© 2025 米羊科技（珠海横琴）有限公司</p>
+                <p>MIT License</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/prompts_data.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+# PRD 和测试文档
+PRD_*.md
+TEST_*.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虚拟环境
+venv/
+env/
+ENV/
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# 上传文件
+uploads/*
+
+# 保留目录结构
+!uploads/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# 日志
+*.log
+
+# 环境变量
+.env
+.env.local
