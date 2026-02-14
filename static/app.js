@@ -78,6 +78,8 @@ const dom = {
     emptyState: $('#empty-state'),
     imageCount: $('#image-count'),
     clearAllBtn: $('#clear-all-btn'),
+    importBtn: $('#import-btn'),
+    importInput: $('#import-input'),
     compactViewBtn: $('#compact-view-btn'),
     themeToggle: $('#theme-toggle-btn'),
     aboutBtn: $('#about-btn'),
@@ -1235,7 +1237,7 @@ function renderGallery() {
         const safeUrl = url.replace(/'/g, "\\'");
         
         return `
-            <div class="card" data-id="${item.id}">
+            <div class="card" data-id="${item.id}" draggable="true">
                 <div class="card-image">
                     <img src="${url}" alt="${escapeHtml(prompt)}" loading="lazy" onclick="openModal('${safeUrl}', ${item.id})">
                     <button class="card-delete-btn" onclick="deleteImage(${item.id}, event)" title="删除">
@@ -3768,8 +3770,330 @@ function initKeyboardShortcuts() {
     });
 }
 
+// ============ 画廊拖拽排序 ============
+
+let galleryDragState = {
+    dragging: false,
+    draggedEl: null,
+    draggedId: null,
+    targetCard: null,
+    insertBefore: true,
+};
+
+function initGalleryDrag() {
+    const gallery = dom.gallery;
+    if (!gallery) return;
+    
+    // 创建或获取指示线元素
+    let indicator = document.getElementById('drag-indicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'drag-indicator';
+        indicator.className = 'drag-indicator';
+        document.body.appendChild(indicator);
+    }
+    
+    function showIndicator(targetCard, above) {
+        if (!targetCard) {
+            indicator.style.display = 'none';
+            return;
+        }
+        
+        const rect = targetCard.getBoundingClientRect();
+        const scrollLeft = window.scrollX || window.pageXOffset;
+        const scrollTop = window.scrollY || window.pageYOffset;
+        
+        // 水平指示线：在卡片上方或下方
+        const left = rect.left + scrollLeft;
+        const top = above ? (rect.top + scrollTop - 2) : (rect.bottom + scrollTop - 2);
+        
+        indicator.style.cssText = `
+            display: block;
+            position: absolute;
+            width: ${rect.width}px;
+            height: 4px;
+            top: ${top}px;
+            left: ${left}px;
+            background: #3b82f6;
+            border-radius: 2px;
+            z-index: 10000;
+            pointer-events: none;
+            box-shadow: 0 0 8px #3b82f6;
+        `;
+    }
+    
+    function hideIndicator() {
+        indicator.style.display = 'none';
+    }
+    
+    function findTargetCard(e) {
+        const cards = [...gallery.querySelectorAll('.card:not(.dragging)')];
+        
+        for (const card of cards) {
+            const rect = card.getBoundingClientRect();
+            
+            // 检查鼠标是否在卡片范围内
+            if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                
+                // 上下判断：鼠标在卡片上半部分则插入到上方，下半部分则插入到下方
+                const centerY = rect.top + rect.height / 2;
+                return {
+                    card,
+                    insertBefore: e.clientY < centerY
+                };
+            }
+        }
+        
+        // 找最近的卡片
+        let closest = null;
+        let closestDist = Infinity;
+        
+        for (const card of cards) {
+            const rect = card.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const dist = Math.hypot(e.clientX - centerX, e.clientY - centerY);
+            
+            if (dist < closestDist) {
+                closestDist = dist;
+                closest = card;
+            }
+        }
+        
+        if (closest && closestDist < 150) {
+            const rect = closest.getBoundingClientRect();
+            const centerY = rect.top + rect.height / 2;
+            return {
+                card: closest,
+                insertBefore: e.clientY < centerY
+            };
+        }
+        
+        return null;
+    }
+    
+    gallery.addEventListener('dragstart', (e) => {
+        const card = e.target.closest('.card');
+        if (!card || galleryMode.active) return;
+        
+        galleryDragState.dragging = true;
+        galleryDragState.draggedEl = card;
+        galleryDragState.draggedId = card.dataset.id;
+        
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', card.dataset.id);
+        
+        setTimeout(() => {
+            card.classList.add('dragging');
+        }, 0);
+    });
+    
+    gallery.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (!galleryDragState.dragging) return;
+        
+        e.dataTransfer.dropEffect = 'move';
+        
+        const result = findTargetCard(e);
+        
+        if (result && result.card.dataset.id !== galleryDragState.draggedId) {
+            galleryDragState.targetCard = result.card;
+            galleryDragState.insertBefore = result.insertBefore;
+            showIndicator(result.card, result.insertBefore);
+        } else {
+            galleryDragState.targetCard = null;
+            hideIndicator();
+        }
+    });
+    
+    gallery.addEventListener('dragleave', (e) => {
+        if (!gallery.contains(e.relatedTarget)) {
+            hideIndicator();
+        }
+    });
+    
+    gallery.addEventListener('dragend', async (e) => {
+        if (!galleryDragState.dragging) return;
+        
+        const draggedEl = galleryDragState.draggedEl;
+        const targetCard = galleryDragState.targetCard;
+        
+        draggedEl.classList.remove('dragging');
+        hideIndicator();
+        
+        if (targetCard && targetCard !== draggedEl) {
+            const draggedId = parseInt(galleryDragState.draggedId);
+            const targetId = parseInt(targetCard.dataset.id);
+            
+            // 更新 state.history 顺序
+            const draggedIndex = state.history.findIndex(item => item.id === draggedId);
+            const targetIndex = state.history.findIndex(item => item.id === targetId);
+            
+            if (draggedIndex !== -1 && targetIndex !== -1) {
+                const [draggedItem] = state.history.splice(draggedIndex, 1);
+                
+                // 重新计算目标索引（因为已经移除了拖拽项）
+                let newTargetIndex = state.history.findIndex(item => item.id === targetId);
+                
+                if (galleryDragState.insertBefore) {
+                    state.history.splice(newTargetIndex, 0, draggedItem);
+                } else {
+                    state.history.splice(newTargetIndex + 1, 0, draggedItem);
+                }
+                
+                // 重新渲染并保存
+                renderGallery();
+                await saveGalleryOrder();
+            }
+        }
+        
+        // 重置状态
+        galleryDragState.dragging = false;
+        galleryDragState.draggedEl = null;
+        galleryDragState.draggedId = null;
+        galleryDragState.targetCard = null;
+    });
+    
+    // drop 事件需要阻止默认行为
+    gallery.addEventListener('drop', (e) => {
+        e.preventDefault();
+    });
+}
+
+async function saveGalleryOrder() {
+    const order = state.history.map(item => item.id);
+    try {
+        const res = await fetch('/api/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order })
+        });
+        const data = await res.json();
+        if (!data.success) {
+            console.error('保存排序失败:', data.error);
+        }
+    } catch (err) {
+        console.error('保存排序失败:', err);
+    }
+}
+
+// ============ 图片导入功能 ============
+
+function initGalleryImport() {
+    const gallery = dom.gallery;
+    const importBtn = dom.importBtn;
+    const importInput = dom.importInput;
+    
+    if (!gallery || !importBtn || !importInput) return;
+    
+    // 点击导入按钮
+    importBtn.addEventListener('click', () => {
+        importInput.click();
+    });
+    
+    // 选择文件后上传
+    importInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+        
+        await uploadImagesToGallery(files);
+        importInput.value = ''; // 清空以便重复选择
+    });
+    
+    // 监听画廊区域的拖拽（外部文件拖入）
+    const workspaceBody = document.getElementById('workspace-body');
+    if (!workspaceBody) return;
+    
+    workspaceBody.addEventListener('dragover', (e) => {
+        // 如果是内部卡片拖拽，不处理
+        if (galleryDragState.dragging) return;
+        
+        // 检查是否有文件
+        if (e.dataTransfer.types.includes('Files')) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            workspaceBody.classList.add('drag-file-over');
+        }
+    });
+    
+    workspaceBody.addEventListener('dragleave', (e) => {
+        if (!workspaceBody.contains(e.relatedTarget)) {
+            workspaceBody.classList.remove('drag-file-over');
+        }
+    });
+    
+    workspaceBody.addEventListener('drop', async (e) => {
+        // 如果是内部卡片拖拽，不处理
+        if (galleryDragState.dragging) return;
+        
+        workspaceBody.classList.remove('drag-file-over');
+        
+        // 检查是否有文件
+        if (!e.dataTransfer.types.includes('Files')) return;
+        
+        e.preventDefault();
+        
+        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+        if (files.length === 0) {
+            toast('请拖入图片文件', 'error');
+            return;
+        }
+        
+        await uploadImagesToGallery(files);
+    });
+}
+
+async function uploadImagesToGallery(files) {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    
+    if (imageFiles.length === 0) {
+        toast('没有可导入的图片', 'error');
+        return;
+    }
+    
+    toast(`正在导入 ${imageFiles.length} 张图片...`, 'info');
+    
+    let successCount = 0;
+    const newRecords = [];
+    
+    for (const file of imageFiles) {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const res = await fetch('/api/import', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await res.json();
+            
+            if (data.success && data.data) {
+                newRecords.push(data.data);
+                successCount++;
+            } else {
+                console.error('导入失败:', file.name, data.error);
+            }
+        } catch (err) {
+            console.error('导入失败:', file.name, err);
+        }
+    }
+    
+    if (successCount > 0) {
+        // 将新记录插入到 history 最前面
+        state.history = [...newRecords.reverse(), ...state.history];
+        renderGallery();
+        toast(`成功导入 ${successCount} 张图片`, 'success');
+    } else {
+        toast('导入失败', 'error');
+    }
+}
+
 // 在 DOMContentLoaded 中初始化
 document.addEventListener('DOMContentLoaded', () => {
     initGalleryMode();
     initKeyboardShortcuts();
+    initGalleryDrag();
+    initGalleryImport();
 });

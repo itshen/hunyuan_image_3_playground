@@ -80,18 +80,32 @@ async def init_db():
                 batch_total_sec REAL DEFAULT 0,
                 parallel INTEGER DEFAULT 1,
                 ref_images TEXT,
-                created_at TEXT
+                created_at TEXT,
+                sort_order INTEGER DEFAULT 0
             )
         """)
         await db.commit()
         
-        # 检查是否需要添加 ref_images 字段（旧数据库升级）
+        # 检查是否需要添加字段（旧数据库升级）
         cursor = await db.execute("PRAGMA table_info(images)")
         columns = [row[1] for row in await cursor.fetchall()]
         if "ref_images" not in columns:
             await db.execute("ALTER TABLE images ADD COLUMN ref_images TEXT")
             await db.commit()
             print("✅ 数据库已升级：添加 ref_images 字段")
+        if "sort_order" not in columns:
+            await db.execute("ALTER TABLE images ADD COLUMN sort_order INTEGER DEFAULT 0")
+            await db.commit()
+            # 初始化 sort_order：按 created_at 倒序赋值
+            await db.execute("""
+                UPDATE images SET sort_order = (
+                    SELECT COUNT(*) FROM images AS i2 
+                    WHERE i2.created_at > images.created_at OR 
+                          (i2.created_at = images.created_at AND i2.id > images.id)
+                )
+            """)
+            await db.commit()
+            print("✅ 数据库已升级：添加 sort_order 字段")
     print("✅ 数据库已初始化")
 
 
@@ -120,17 +134,27 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+async def get_next_sort_order():
+    """获取下一个 sort_order 值（最小值 - 1，确保新图片排在最前面）"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT MIN(sort_order) FROM images")
+        row = await cursor.fetchone()
+        min_order = row[0] if row[0] is not None else 0
+        return min_order - 1
+
+
 async def save_image_record(*, job_id, filename, prompt, seed, image_size, width, height,
                             steps, api_url, status="completed", error=None, info=None,
                             duration_sec=0, batch_count=1, batch_total_sec=0, parallel=True,
                             ref_images=None):
     # ref_images 是文件名列表，存储为 JSON 字符串
     ref_images_str = json.dumps(ref_images) if ref_images else None
+    sort_order = await get_next_sort_order()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
-            INSERT INTO images (job_id, filename, prompt, seed, image_size, width, height, steps, api_url, status, error, info, duration_sec, batch_count, batch_total_sec, parallel, ref_images, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (job_id, filename, prompt, seed, image_size, width, height, steps, api_url, status, error, info, duration_sec, batch_count, batch_total_sec, 1 if parallel else 0, ref_images_str, now_bjt()))
+            INSERT INTO images (job_id, filename, prompt, seed, image_size, width, height, steps, api_url, status, error, info, duration_sec, batch_count, batch_total_sec, parallel, ref_images, created_at, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (job_id, filename, prompt, seed, image_size, width, height, steps, api_url, status, error, info, duration_sec, batch_count, batch_total_sec, 1 if parallel else 0, ref_images_str, now_bjt(), sort_order))
         await db.commit()
 
 
@@ -147,7 +171,7 @@ async def update_batch_total(job_id: str, batch_total_sec: float):
 async def get_history(limit: int = 100):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT * FROM images ORDER BY created_at DESC LIMIT ?", (limit,))
+        cursor = await db.execute("SELECT * FROM images ORDER BY sort_order ASC LIMIT ?", (limit,))
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
@@ -648,6 +672,96 @@ async def api_priority_job(job_id: str):
         return JSONResponse({"success": True, "message": "任务已置顶"})
     else:
         return JSONResponse({"success": False, "error": "任务未在队列中找到"}, status_code=404)
+
+
+@app.post("/api/reorder")
+async def api_reorder(request: Request):
+    """重新排序图片，接收完整的 id 顺序数组"""
+    data = await request.json()
+    order = data.get("order", [])  # [id1, id2, id3, ...]
+    
+    if not order:
+        return JSONResponse({"success": False, "error": "缺少 order 参数"}, status_code=400)
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        # 批量更新 sort_order
+        for idx, image_id in enumerate(order):
+            await db.execute(
+                "UPDATE images SET sort_order = ? WHERE id = ?",
+                (idx, image_id)
+            )
+        await db.commit()
+    
+    print(f"[{now_bjt()}] 🔄 画廊已重新排序，共 {len(order)} 张图片")
+    return JSONResponse({"success": True})
+
+
+@app.post("/api/import")
+async def api_import(file: UploadFile = File(...)):
+    """导入外部图片到画廊"""
+    from PIL import Image
+    import io
+    
+    # 读取文件内容
+    content = await file.read()
+    
+    # 获取图片尺寸
+    try:
+        img = Image.open(io.BytesIO(content))
+        width, height = img.size
+    except Exception:
+        return JSONResponse({"success": False, "error": "无法读取图片"}, status_code=400)
+    
+    # 保存到 output 目录
+    ext = Path(file.filename).suffix.lower() or '.png'
+    if ext not in ('.png', '.jpg', '.jpeg', '.webp'):
+        ext = '.png'
+    
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{ts}_import_{uuid.uuid4().hex[:6]}{ext}"
+    filepath = OUTPUT_DIR / filename
+    
+    with open(filepath, 'wb') as f:
+        f.write(content)
+    
+    # 获取下一个 sort_order
+    sort_order = await get_next_sort_order()
+    
+    # 写入数据库
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO images (job_id, filename, prompt, seed, image_size, width, height, steps, api_url, status, created_at, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            f"import_{uuid.uuid4().hex[:8]}",
+            filename,
+            "(导入图片)",
+            0,
+            "custom",
+            width,
+            height,
+            0,
+            "",
+            "imported",
+            now_bjt(),
+            sort_order
+        ))
+        last_id = (await db.execute("SELECT last_insert_rowid()")).fetchone()
+        await db.commit()
+        
+        # 获取插入的记录
+        cursor = await db.execute("SELECT * FROM images WHERE filename = ?", (filename,))
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM images WHERE filename = ?", (filename,))
+        row = await cursor.fetchone()
+        record = dict(row) if row else None
+    
+    print(f"[{now_bjt()}] 📥 图片已导入: {filename} ({width}x{height})")
+    
+    return JSONResponse({
+        "success": True,
+        "data": record
+    })
 
 
 @app.delete("/api/images/{image_id}")

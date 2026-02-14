@@ -2773,3 +2773,66 @@ body {
     visibility: visible;
 }
 
+/* ============ 画廊拖拽排序 ============ */
+
+.card[draggable="true"] {
+    cursor: grab;
+}
+
+.card[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.card.dragging {
+    opacity: 0.4;
+    transform: scale(0.95);
+    z-index: 100;
+    pointer-events: none;
+    transition: opacity 0.15s, transform 0.15s;
+}
+
+/* 拖拽指示线 */
+.drag-indicator {
+    position: absolute;
+    width: 4px;
+    background: var(--primary);
+    border-radius: 2px;
+    z-index: 1000;
+    pointer-events: none;
+    display: none;
+    box-shadow: 0 0 8px var(--primary);
+}
+
+/* 选图模式下禁用拖拽样式 */
+.gallery.select-mode .card[draggable="true"] {
+    cursor: pointer;
+}
+
+.gallery.select-mode .card.dragging {
+    opacity: 1;
+    transform: none;
+}
+
+/* ============ 文件拖入画廊 ============ */
+
+.workspace-body.drag-file-over {
+    position: relative;
+}
+
+.workspace-body.drag-file-over::after {
+    content: '松开鼠标导入图片';
+    position: absolute;
+    inset: 0;
+    background: rgba(59, 130, 246, 0.1);
+    border: 3px dashed var(--primary);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--primary);
+    z-index: 100;
+    pointer-events: none;
+}
+
