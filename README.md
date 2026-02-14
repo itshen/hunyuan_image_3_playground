@@ -11,6 +11,20 @@
 - [技术论文](https://arxiv.org/abs/2509.23951)
 - [官方 GitHub](https://github.com/Tencent-Hunyuan/HunyuanImage-3.0)
 
+## 📸 界面预览
+
+### 系统界面
+
+<div align="center">
+  <img src="static/system_ui.jpg" alt="系统界面" width="100%"/>
+</div>
+
+### 图片画廊
+
+<div align="center">
+  <img src="static/gallery.jpg" alt="图片画廊" width="100%"/>
+</div>
+
 ## 🌟 核心优势
 
 - **简洁美观**：现代化界面设计，操作直观流畅
